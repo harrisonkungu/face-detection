@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.util.Log
 import android.view.View
 import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
@@ -37,9 +38,36 @@ class FaceDetector(
         private const val MIN_FACE_SIZE = 50f
         private const val FACE_SIZE_MULTIPLIER = 3.5f
         private const val FACE_POSITION_ACCURACY = 0.3f
+
+        private var lastBlinkTimestamp: Long = 0
+        private var isLeftEyePreviouslyClosed = false
+        private var isRightEyePreviouslyClosed = false
+
+        private var blinkDetectedTimestamp: Long = 0
+        var blinkCount = 0
+        var headMovement = 0
+
+
+
+        private const val EYE_OPENED_PROBABILITY = 0.4F
+        private const val IS_SMILING_PROBABILITY = 0.3F
+        private const val EULER_Y_RIGHT_MOVEMENT = 35
+        private const val EULER_Y_LEFT_MOVEMENT = -35
+        private const val MAXIMUM_FACES_DETECTED = 1
+
+
+        private val blinkState = MutableStateFlow(false)
+
+
+         val hasTurnedLeft = MutableStateFlow(false)
+         val hasTurnedRight = MutableStateFlow(false)
+
+
     }
 
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+
 
     private val options = FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -73,7 +101,31 @@ class FaceDetector(
 
             try {
                 val faces = detectFaces(inputImage)
+                if (faces.size > 2) {
+                  return@launch
+                }
                 val isFaceDetected = faces.any {
+
+//                   detectBlink(
+//                        isLeftEyeOpen = (it.leftEyeOpenProbability?.toDouble() ?: 0.0)  > 0.9,
+//                        isRightEyeOpen = (it.rightEyeOpenProbability?.toDouble() ?: 0.0) > 0.9,
+//                    )
+                    validateBlinkedEyes(
+                        it.leftEyeOpenProbability,
+                        it.rightEyeOpenProbability
+                    ) { blinked->
+                        if (blinked){
+                            blinkCount++
+                        }
+//                        blinkState.value = blinked
+                    }
+//                    validateHeadMovement(it.headEulerAngleY, HeadMovement.LEFT){
+//                            headMovement++
+//                    }
+
+                    val headPitchAngle = it.headEulerAngleX
+                    val isHeadPitchValid = headPitchAngle in -15f..15f // Adjust range as needed
+
                     val noseLandmark = it.getLandmark(FaceLandmark.NOSE_BASE)
                     val leftEyeLandmark = it.getLandmark(FaceLandmark.LEFT_EYE)
                     val rightEyeLandmark = it.getLandmark(FaceLandmark.RIGHT_EYE)
@@ -81,6 +133,7 @@ class FaceDetector(
                     val rightCheekLandmark = it.getLandmark(FaceLandmark.RIGHT_CHEEK)
                     val mouthLeftLandmark = it.getLandmark(FaceLandmark.MOUTH_LEFT)
                     val mouthRightLandmark = it.getLandmark(FaceLandmark.MOUTH_RIGHT)
+
                     val nosePosition = noseLandmark?.position?.let { res-> Offset(res.x, res.y) }
                     val leftEyePosition = leftEyeLandmark?.position?.let { res-> Offset(res.x, res.y) }
                     val rightEyePosition = rightEyeLandmark?.position?.let { res-> Offset(res.x, res.y) }
@@ -102,7 +155,11 @@ class FaceDetector(
                         mouthLeftPosition,
                         mouthRightPosition,
                         isLeftEyeOpen,
-                        isRightEyeOpen
+                        isRightEyeOpen,
+                        blinkCount > 0,
+                        isHeadPitchValid,
+                        headMovement > 0,
+                        it
                     )
                 }
                 onFaceDetected(isFaceDetected)
@@ -123,6 +180,71 @@ class FaceDetector(
     }
 
 
+
+
+    private fun detectBlink(
+        isLeftEyeOpen: Boolean,
+        isRightEyeOpen: Boolean
+    ) {
+        val currentTimestamp = System.currentTimeMillis()
+
+        val isLeftEyeClosed = !isLeftEyeOpen
+        val isRightEyeClosed = !isRightEyeOpen
+
+        val isLeftEyeBlink = isLeftEyePreviouslyClosed && isLeftEyeOpen &&
+                (currentTimestamp - lastBlinkTimestamp > 200)
+        isLeftEyePreviouslyClosed = isLeftEyeClosed
+
+        val isRightEyeBlink = isRightEyePreviouslyClosed && isRightEyeOpen &&
+                (currentTimestamp - lastBlinkTimestamp > 200)
+        isRightEyePreviouslyClosed = isRightEyeClosed
+
+        if ((isLeftEyeBlink || isRightEyeBlink) && (currentTimestamp - lastBlinkTimestamp > 200)) {
+            lastBlinkTimestamp = currentTimestamp
+            blinkCount++
+            blinkState.value = true
+            Log.d("BlinkCounter", "Blink count: $blinkCount")
+        } else {
+            blinkState.value = false
+        }
+    }
+
+
+    private fun validateBlinkedEyes(
+        leftEyeProbability: Float?,
+        rightEyeProbability: Float?,
+        callbackBlinked: (Boolean) -> Unit
+    ): Boolean {
+        Log.d("BlinkCounter", "Blink count: $blinkCount")
+        val isLeftEyeOpened = (leftEyeProbability ?: 0f) > EYE_OPENED_PROBABILITY
+        val isRightEyeOpened = (rightEyeProbability ?: 0f) > EYE_OPENED_PROBABILITY
+
+        return (isLeftEyeOpened && isRightEyeOpened).also {
+            if (!it) callbackBlinked.invoke(true)
+        }
+    }
+
+//    private fun validateHeadMovement(
+//        headEulerAngleY: Float,
+//        headMovement: HeadMovement,
+//        callbackHeadMovement: (Boolean) -> Unit
+//    ) {
+//        if (detectEulerYMovement(headEulerAngleY) == headMovement) {
+//            callbackHeadMovement(true)
+//        }
+//    }
+//
+//    private fun detectEulerYMovement(
+//        headEulerAngleY: Float
+//    ): HeadMovement {
+//        return when {
+//            headEulerAngleY > EULER_Y_RIGHT_MOVEMENT -> HeadMovement.RIGHT
+//            headEulerAngleY < EULER_Y_LEFT_MOVEMENT -> HeadMovement.LEFT
+//            else -> HeadMovement.CENTER
+//        }
+//    }
+
+
     private fun isFaceInsideOval(
         faceCenter: Offset,
         faceWidth: Float,
@@ -135,7 +257,11 @@ class FaceDetector(
         mouthLeftPosition: Offset?,
         mouthRightPosition: Offset?,
         isLeftEyeOpen: Boolean,
-        isRightEyeOpen: Boolean
+        isRightEyeOpen: Boolean,
+        isBlinkDetected: Boolean,
+        isHeadPitchValid: Boolean,
+        headMovement: Boolean,
+        face: Face
     ): Boolean {
 
         val dx = (faceCenter.x - ovalCenter.x) / ovalRadiusX
@@ -203,6 +329,20 @@ class FaceDetector(
         val faceFitsInOval = faceWidth in (MIN_FACE_SIZE)..(ovalRadiusX * FACE_SIZE_MULTIPLIER) &&
                 faceHeight in MIN_FACE_SIZE..(ovalRadiusY * FACE_SIZE_MULTIPLIER)
 
+
+
+
+
+
+        val isTurningRight = face.headEulerAngleY > 10f
+        val isTurningLeft = face.headEulerAngleY < -10f
+
+        // Update the state for turning left and right
+        if (isTurningLeft) hasTurnedLeft.value = true
+        if (isTurningRight) hasTurnedRight.value = true
+
+
+
         return isCenterInsideOval && overlapsOval && isNoseInsideOval && isLeftEyeInsideOval
                 &&
                 isRightEyeInsideOval
@@ -210,7 +350,9 @@ class FaceDetector(
 //                && isMouthLeftInsideOval
 //                && isMouthRightInsideOval
                 &&
-                isLeftCheekInsideOval && isRightCheekInsideOval && areEyesOpen && faceFitsInOval
+                isLeftCheekInsideOval && isRightCheekInsideOval && areEyesOpen && faceFitsInOval && hasTurnedRight.value && hasTurnedLeft.value
+
+//                && isHeadPitchValid && headMovement
     }
 
 }
@@ -231,6 +373,5 @@ class FaceOverlayView(context: Context) : View(context) {
         }
     }
 }
-
 
 

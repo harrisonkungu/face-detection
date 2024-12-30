@@ -4,19 +4,23 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
-import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.Paint
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.net.Uri
+import android.util.Log
 import android.view.ViewGroup.LayoutParams
-import android.view.WindowManager
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
@@ -25,53 +29,64 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.LifecycleOwner
+import com.apps.facedetection.FaceDetector.Companion.blinkCount
+import com.apps.facedetection.FaceDetector.Companion.hasTurnedLeft
+import com.apps.facedetection.FaceDetector.Companion.hasTurnedRight
+import com.google.common.util.concurrent.ListenableFuture
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.Executor
 
 private const val OVAL_WIDTH_DP = 300
@@ -87,14 +102,26 @@ fun FaceDetectionScreen() {
 
     var isCameraShown by remember { mutableStateOf(true) }
     var isFaceDetected by remember { mutableStateOf(false) }
+    var imageCorrect = remember { mutableStateOf(false) }
 
     var capturedPhoto by remember { mutableStateOf<ImageBitmap?>(null) }
     var ovalCenter by remember { mutableStateOf<Offset?>(null) }
 
     val cameraController: LifecycleCameraController =
         remember { LifecycleCameraController(context) }
-    cameraController.cameraSelector =
-        CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
+
+
+
+
+
+//    cameraController.cameraSelector =
+//        CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
+    val cameraProvider = remember { ProcessCameraProvider.getInstance(context) }
+    var isFrontCameraAvailable = remember { mutableStateOf(false) }
+    var isBackCameraAvailable = remember { mutableStateOf(false) }
+    var isUsingFrontCamera = remember { mutableStateOf(true) }
+
+
 
     val cameraPreviewView = remember {
         mutableStateOf(PreviewView(context))
@@ -105,8 +132,6 @@ fun FaceDetectionScreen() {
     val ovalHeightPx = with(density) { OVAL_HEIGHT_DP.dp.toPx() }
 
 
-    // Locks portrait orientation for duration of challenge and resets on complete
-
 
     Scaffold(
         modifier = Modifier
@@ -115,48 +140,21 @@ fun FaceDetectionScreen() {
             .statusBarsPadding(),
     ) { paddingValues: PaddingValues ->
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isCameraShown) {
-//                LockPortraitOrientation { resetOrientation ->
-//                    Surface(color = MaterialTheme.colorScheme.background) {
-//                        AlwaysOnMaxBrightnessScreen()
-//                        CameraView(paddingValues, cameraPreviewView)
-//                    }
-//                }
-                CameraView(paddingValues, cameraPreviewView)
 
-            } else {
-                capturedPhoto?.let { photo ->
-                    CapturedPhotoView(photo)
+            if(!imageCorrect.value) {
+                if (isCameraShown) {
+                    CameraView(paddingValues, cameraPreviewView)
+
+                } else {
+                    capturedPhoto?.let { photo ->
+                        CapturedPhotoView(photo)
+                    }
                 }
-            }
-
-            OvalOverlay(
-                modifier = Modifier.fillMaxSize(),
-                isFaceDetected = isFaceDetected,
-                onCenterCalculated = { ovalCenter = it }
-            )
-
-
-            ovalCenter?.let { offset->
-                startFaceDetection(
-                    context = context,
-                    cameraController = cameraController,
-                    lifecycleOwner = lifecycleOwner,
-                    previewView = cameraPreviewView.value,
-                    ovalRect = offset,
-                    onFaceDetected = { detected ->
-                        isFaceDetected = detected
-                    },
-                )
-            }
-
-            if (isCameraShown) {
-                CapturePhotoButton(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 50.dp),
+                OvalOverlay(
+                    modifier = Modifier.fillMaxSize(),
                     isFaceDetected = isFaceDetected,
-                    onButtonClicked = {
+                    onCenterCalculated = { ovalCenter = it },
+                    autoCapture = {
                         capturePhotoAndReplaceBackground(
                             context,
                             cameraController,
@@ -166,13 +164,125 @@ fun FaceDetectionScreen() {
                             if (isFaceDetected)
                                 isCameraShown = false
                         }
-                    },
+                    }
                 )
+                ovalCenter?.let { offset ->
+                    startFaceDetection(
+                        context = context,
+                        cameraController = cameraController,
+                        lifecycleOwner = lifecycleOwner,
+                        previewView = cameraPreviewView.value,
+                        ovalRect = offset,
+                        onFaceDetected = { detected ->
+                            isFaceDetected = detected
+                        },
+                    )
+                }
+                if (isCameraShown) {
+                    Column(modifier = Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+
+                        CapturePhotoButton(
+                            modifier = Modifier
+
+                                .padding(bottom = 10.dp),
+                            isFaceDetected = isFaceDetected,
+                            onButtonClicked = {
+                                capturePhotoAndReplaceBackground(
+                                    context,
+                                    cameraController,
+                                    isFaceDetected
+                                ) { capturedBitmap ->
+                                    capturedPhoto = capturedBitmap.asImageBitmap()
+                                    if (isFaceDetected)
+                                        isCameraShown = false
+                                }
+                            },
+                        )
+
+                        CameraToggleButton(cameraController, cameraProvider, isFrontCameraAvailable, isBackCameraAvailable, isUsingFrontCamera)
+                    }
+
+
+
+                } else {
+                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+
+                        RecaptureButton(
+                            modifier = Modifier
+                                .padding(bottom = 20.dp),
+                            onButtonClicked = {
+                                isCameraShown = true
+                                isFaceDetected = false
+                                hasTurnedLeft.value = false
+                                hasTurnedRight.value = false
+                                blinkCount = 0
+                            },
+                        )
+                        CorrectButton(
+                            modifier = Modifier
+                                .padding(bottom = 50.dp),
+                            onButtonClicked = {
+                                imageCorrect.value = true
+                                hasTurnedLeft.value = false
+                                hasTurnedRight.value = false
+                                blinkCount = 0
+                            },
+                        )
+                    }
+
+
+                }
+
+            }else if (imageCorrect.value && capturedPhoto!=null){
+                capturedPhoto?.let { photo ->
+                    CorrectImageAvatar(photo)
+                }
             }
         }
 
     }
 }
+
+
+@Composable
+fun CameraToggleButton(
+    cameraController: LifecycleCameraController,
+    cameraProvider: ListenableFuture<ProcessCameraProvider>,
+    isFrontCameraAvailable: MutableState<Boolean>,
+    isBackCameraAvailable: MutableState<Boolean>,
+    isUsingFrontCamera: MutableState<Boolean>,
+) {
+
+    LaunchedEffect(cameraProvider) {
+        cameraProvider.get().run {
+            isFrontCameraAvailable.value = hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)
+            isBackCameraAvailable.value = hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)
+        }
+    }
+
+    LaunchedEffect(isUsingFrontCamera.value) {
+        val lensFacing = if (isUsingFrontCamera.value) {
+            CameraSelector.LENS_FACING_FRONT
+        } else {
+            CameraSelector.LENS_FACING_BACK
+        }
+        cameraController.cameraSelector = CameraSelector.Builder()
+            .requireLensFacing(lensFacing)
+            .build()
+    }
+
+    FlipCamera(modifier = Modifier.padding(bottom = 20.dp), onButtonClicked = {
+        isUsingFrontCamera.value = !isUsingFrontCamera.value
+        hasTurnedLeft.value = false
+        hasTurnedRight.value = false
+        blinkCount = 0
+    },
+        enabled = (isUsingFrontCamera.value && isBackCameraAvailable.value) ||
+            (!isUsingFrontCamera.value && isFrontCameraAvailable.value), )
+
+}
+
+
 
 @Composable
 private fun CapturedPhotoView(photo: ImageBitmap) {
@@ -183,9 +293,33 @@ private fun CapturedPhotoView(photo: ImageBitmap) {
             .fillMaxSize(),
         bitmap = photo,
         contentDescription = null,
-        contentScale = ContentScale.Crop,
+//        contentScale = ContentScale.Crop,
     )
 }
+
+
+
+@Composable
+private fun CorrectImageAvatar(photo: ImageBitmap) {
+    Box(
+        modifier = Modifier
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .size(350.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Gray)
+            .border(2.dp, Color.White, RoundedCornerShape(16.dp))
+    ) {
+        Image(
+            modifier = Modifier.fillMaxSize(),
+            bitmap = photo,
+            contentDescription = null,
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+
 
 @Composable
 private fun CameraView(
@@ -218,28 +352,135 @@ private fun CapturePhotoButton(
     isFaceDetected: Boolean,
     onButtonClicked: ()->Unit
 ) {
+    Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = "Tilt turn face to the right and left", color = Color.White)
+        Image(
+            modifier = modifier
+                .padding(top = 10.dp)
+                .size(50.dp)
+                .clickable {
+                    onButtonClicked()
+
+                },
+            painter = painterResource(
+                id =
+                if (isFaceDetected)
+                    R.drawable.camera_button_enabled
+                else
+                    R.drawable.camera_button_disabled,
+            ),
+            contentDescription = null,
+        )
+    }
+
+
+
+}
+
+
+@Composable
+private fun RecaptureButton(
+    modifier: Modifier = Modifier,
+    onButtonClicked: () -> Unit
+) {
+    var rotationAngle by remember { mutableFloatStateOf(0f) }
+    val animatedRotation by animateFloatAsState(
+        targetValue = rotationAngle,
+        animationSpec = tween(durationMillis = 700, easing = LinearEasing), // Smooth animation
+        label = ""
+    )
 
     Image(
         modifier = modifier
             .padding(top = 20.dp)
-            .size(92.dp)
+            .size(50.dp)
+            .graphicsLayer(
+                rotationZ = animatedRotation
+            )
             .clickable {
+                rotationAngle += 360f
                 onButtonClicked()
-
             },
-        painter = painterResource(
-            id =
-            if (isFaceDetected)
-                R.drawable.camera_button_enabled
-            else
-                R.drawable.camera_button_disabled,
-        ),
+        painter = painterResource(id = R.drawable.recapture_24),
         contentDescription = null,
     )
+}
+
+@Composable
+private fun FlipCamera(
+    modifier: Modifier = Modifier,
+    onButtonClicked: () -> Unit,
+    enabled :Boolean = false
+) {
+    var rotationAngle by remember { mutableFloatStateOf(0f) }
+    val animatedRotation by animateFloatAsState(
+        targetValue = rotationAngle,
+        animationSpec = tween(durationMillis = 700, easing = LinearEasing), // Smooth animation
+        label = ""
+    )
+    if (enabled){
+        Image(
+            modifier = modifier
+                .padding(top = 20.dp)
+                .size(50.dp)
+                .graphicsLayer(
+                    rotationZ = animatedRotation
+                )
+                .clickable {
+                    rotationAngle += 180f
+                    onButtonClicked()
+                },
+            painter = painterResource(id = R.drawable.baseline_cameraswitch_24),
+            contentDescription = null,
+        )
+    }else{
+        Image(
+            modifier = modifier
+                .padding(top = 20.dp)
+                .size(50.dp)
+                .graphicsLayer(
+                    rotationZ = animatedRotation
+                ),
+            painter = painterResource(id = R.drawable.baseline_cameraswitch_24),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(Color.Gray)
+        )
+    }
 
 }
 
-private fun capturePhotoAndReplaceBackground(
+
+
+@Composable
+private fun CorrectButton(
+    modifier: Modifier = Modifier,
+    onButtonClicked: () -> Unit
+) {
+    var isZoomedIn by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isZoomedIn) 1.5f else 1f,
+        animationSpec = tween(durationMillis = 300, easing = LinearEasing),
+        label = ""
+    )
+    Image(
+        modifier = modifier
+            .padding(top = 20.dp)
+            .size(50.dp)
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale
+            )
+            .clickable {
+                isZoomedIn = !isZoomedIn
+                onButtonClicked()
+            },
+        painter = painterResource(id = R.drawable.correct_check_24),
+        contentDescription = null,
+    )
+}
+
+
+fun capturePhotoAndReplaceBackground(
     context: Context,
     cameraController: LifecycleCameraController,
     isFaceDetected: Boolean,
@@ -251,28 +492,182 @@ private fun capturePhotoAndReplaceBackground(
             mainExecutor,
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
-                    val capturedBitmap: Bitmap =
-                        image.toBitmap().rotateBitmap(image.imageInfo.rotationDegrees)
+                    val buffer = image.planes[0].buffer
+                    buffer.rewind()
+                    val bytes = ByteArray(buffer.remaining())
+                    buffer.get(bytes)
+                    var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, null)
+                    if (cameraController.cameraInfo!!.lensFacing == CameraSelector.LENS_FACING_FRONT) {
+                        bitmap = bitmap.flipHorizontally()
+                    }
+                    val degrees = image.imageInfo.rotationDegrees
+                    val fileUri = saveBitmapToFile(context, bitmap, "captured_image.jpg")
+                    if (degrees != 0) {
+                        //samsung
+                        bitmap = rotateBitmap(bitmap, degrees)
+                        processCapturedPhotoAndReplaceBackground(true, bitmap, context, fileUri) { processedBitmap ->
+                            if (fileUri != null) {
+                                onBackgroundReplaced(processedBitmap)
+                                Toast.makeText(context, "Done Processing", Toast.LENGTH_SHORT).show()
+                            }else{
+                                Toast.makeText(context, "Unable to save image1", Toast.LENGTH_SHORT).show()
+                            }
 
-                    processCapturedPhotoAndReplaceBackground(capturedBitmap) { processedBitmap ->
-                        onBackgroundReplaced(processedBitmap)
+                        }
+                    }else{
+                        processCapturedPhotoAndReplaceBackground(false, bitmap, context, fileUri) { processedBitmap ->
+                            if (fileUri != null) {
+                                onBackgroundReplaced(processedBitmap)
+                                Toast.makeText(context, "Done Processing", Toast.LENGTH_SHORT).show()
+                            }else{
+                                Toast.makeText(context, "Unable to save image2", Toast.LENGTH_SHORT).show()
+                            }
+
+                        }
+
+                        if (fileUri != null) {
+                            println("Captured image URI: $fileUri")
+                        } else {
+                            println("Failed to save captured image to cache")
+                        }
+
                     }
 
                     image.close()
                 }
 
                 override fun onError(exception: ImageCaptureException) {
+                    exception.printStackTrace()
                 }
             },
         )
     }
 }
 
-private fun processCapturedPhotoAndReplaceBackground(
+fun Bitmap.flipHorizontally(): Bitmap {
+    val matrix = Matrix().apply { postScale(-1f, 1f, width / 2f, height / 2f) }
+    return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+}
+
+
+fun saveBitmapToFile(context: Context, bitmap: Bitmap, fileName: String): Uri? {
+    return try {
+        val file = File(context.cacheDir, fileName)
+        val outputStream = FileOutputStream(file)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+        outputStream.flush()
+        outputStream.close()
+
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            file
+        )
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+
+fun rotateBitmap(bitmap: Bitmap, rotationDegrees: Int): Bitmap {
+    val rotationMatrix = Matrix()
+    rotationMatrix.postRotate(rotationDegrees.toFloat())
+    val rotatedBitmap =
+        Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, rotationMatrix, true)
+    bitmap.recycle()
+    return rotatedBitmap
+}
+
+fun processCapturedPhotoAndReplaceBackground(
+    rotate: Boolean,
     capturedBitmap: Bitmap,
+    context: Context,
+    fileUrl: Uri?,
     onBackgroundReplaced: (Bitmap) -> Unit,
 ) {
-    onBackgroundReplaced(capturedBitmap)
+    val rawBitmap = if (rotate) {
+        handleSamplingAndRotationBitmap(context, fileUrl)
+    } else {
+        capturedBitmap
+    }
+
+    val squareSize = rawBitmap.width.coerceAtMost(rawBitmap.height)
+    val cropStartX = ((rawBitmap.width - squareSize) / 2).coerceAtLeast(0)
+    val cropStartY = ((rawBitmap.height - squareSize) / 2).coerceAtLeast(0)
+    val croppedBitmap = Bitmap.createBitmap(
+        rawBitmap,
+        cropStartX,
+        cropStartY,
+        squareSize,
+        squareSize
+    )
+
+    onBackgroundReplaced(croppedBitmap)
+}
+
+@Throws(IOException::class)
+fun handleSamplingAndRotationBitmap(context: Context, selectedImage: Uri?): Bitmap {
+    val MAX_HEIGHT = 1024
+    val MAX_WIDTH = 1024
+    val options = BitmapFactory.Options()
+    options.inJustDecodeBounds = true
+    var imageStream = context.contentResolver.openInputStream(selectedImage!!)
+    BitmapFactory.decodeStream(imageStream, null, options)
+    imageStream!!.close()
+    options.inSampleSize = calculateInSampleSize(options, MAX_WIDTH, MAX_HEIGHT)
+    options.inJustDecodeBounds = false
+    imageStream = context.contentResolver.openInputStream(selectedImage)
+    var img = BitmapFactory.decodeStream(imageStream, null, options)
+    img = rotateImageIfRequired(context, img!!, selectedImage)
+    return img
+}
+
+fun calculateInSampleSize(
+    options: BitmapFactory.Options,
+    reqWidth: Int, reqHeight: Int
+): Int {
+    val height = options.outHeight
+    val width = options.outWidth
+    var inSampleSize = 1
+
+    if (height > reqHeight || width > reqWidth) {
+        val heightRatio = Math.round(height.toFloat() / reqHeight.toFloat())
+        val widthRatio = Math.round(width.toFloat() / reqWidth.toFloat())
+        inSampleSize = if (heightRatio < widthRatio) heightRatio else widthRatio
+        val totalPixels = (width * height).toFloat()
+        val totalReqPixelsCap = (reqWidth * reqHeight * 2).toFloat()
+
+        while (totalPixels / (inSampleSize * inSampleSize) > totalReqPixelsCap) {
+            inSampleSize++
+        }
+    }
+    return inSampleSize
+}
+
+@Throws(IOException::class)
+private fun rotateImageIfRequired(context: Context, img: Bitmap, selectedImage: Uri): Bitmap {
+    val input = context.contentResolver.openInputStream(selectedImage)
+    val exif = ExifInterface(input!!)
+    if (exif.getAttribute(ExifInterface.TAG_ORIENTATION).equals("6", ignoreCase = true)) {
+        return rotateImage(img, 90)
+    } else if (exif.getAttribute(ExifInterface.TAG_ORIENTATION).equals("8", ignoreCase = true)) {
+        return rotateImage(img, 270)
+    } else if (exif.getAttribute(ExifInterface.TAG_ORIENTATION).equals("3", ignoreCase = true)) {
+        return rotateImage(img, 180)
+    } else if (exif.getAttribute(ExifInterface.TAG_ORIENTATION).equals("0", ignoreCase = true)) {
+        return  rotateImage(img, 90)
+    }else{
+        return img
+    }
+}
+
+fun rotateImage(img: Bitmap, degree: Int): Bitmap {
+    val matrix = Matrix()
+    matrix.postRotate(degree.toFloat())
+    val rotatedImg = Bitmap.createBitmap(img, 0, 0, img.width, img.height, matrix, true)
+    img.recycle()
+    return rotatedImg
 }
 
 private fun startFaceDetection(
@@ -284,10 +679,8 @@ private fun startFaceDetection(
     onFaceDetected: (Boolean) -> Unit,
 
 ) {
-
     cameraController.imageAnalysisTargetSize = CameraController.OutputSize(AspectRatio.RATIO_4_3)
     cameraController.imageAnalysisBackpressureStrategy = ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
-
     cameraController.setImageAnalysisAnalyzer(
         ContextCompat.getMainExecutor(context),
         FaceDetector(
@@ -308,18 +701,22 @@ private fun OvalOverlay(
     modifier: Modifier = Modifier,
     isFaceDetected: Boolean,
     onCenterCalculated: (Offset) -> Unit = {},
+    autoCapture: () -> Unit,
 ) {
     val sweepAngle by animateFloatAsState(
         targetValue = if (isFaceDetected) 360f else 0f,
         animationSpec = tween(
-            durationMillis = 1000,
+            durationMillis = 1500,
             easing = LinearEasing
         ), label = ""
     )
 
+    LaunchedEffect(sweepAngle) {
+        if (sweepAngle == 360f) {
+            autoCapture()
+        }
+    }
 
-    val ovalColor =
-        if (isFaceDetected) Color.Green else Color.Red
     Box(
         modifier = modifier,
         contentAlignment = Alignment.TopCenter,
@@ -341,13 +738,12 @@ private fun OvalOverlay(
                     (ovalTopOffset - OVAL_HEIGHT_DP / OVAL_TOP_OFFSET_RATIO)
                 )
 
-            val ovalRect =
-                Rect(
-                    ovalLeftOffset,
-                    ovalTopOffset,
-                    ovalLeftOffset + ovalSize.width,
-                    ovalTopOffset + ovalSize.height
-                )
+            val ovalRect = Rect(
+                ovalLeftOffset,
+                ovalTopOffset,
+                ovalLeftOffset + ovalSize.width,
+                ovalTopOffset + ovalSize.height
+            )
             val ovalPath = Path().apply {
                 addOval(ovalRect)
             }
@@ -356,16 +752,13 @@ private fun OvalOverlay(
             }
         }
 
-
-        Canvas(
-            modifier = modifier,
-        ) {
+        Canvas(modifier = modifier) {
             val ovalSize = Size(OVAL_WIDTH_DP.dp.toPx(), OVAL_HEIGHT_DP.dp.toPx())
             val ovalLeft = (size.width - ovalSize.width) / OVAL_LEFT_OFFSET_RATIO
             val ovalTop =
                 (size.height - ovalSize.height) / OVAL_TOP_OFFSET_RATIO - ovalSize.height
             drawOval(
-                color = ovalColor,
+                color = Color.Gray,
                 style = Stroke(width = OVAL_TOP_OFFSET_RATIO.dp.toPx()),
                 topLeft = Offset(ovalLeft, ovalTop + ovalSize.height),
                 size = ovalSize,
@@ -381,86 +774,6 @@ private fun OvalOverlay(
                 style = Stroke(width = 10f)
             )
         }
-
-    }
-}
-
-
-
-@Composable
-fun AnimatedOvalOverlay(
-    modifier: Modifier = Modifier,
-    isFaceDetected: Boolean,
-    ovalCenter: Offset?,
-    ovalWidth: Float,
-    ovalHeight: Float
-) {
-    val sweepAngle by animateFloatAsState(
-        targetValue = if (isFaceDetected) 360f else 0f,
-        animationSpec = tween(
-            durationMillis = 1000,
-            easing = LinearEasing
-        ), label = ""
-    )
-
-    if (ovalCenter != null) {
-        Canvas(modifier = modifier) {
-
-
-            // Draw the static oval
-            drawOval(
-                color = Color.Gray.copy(alpha = 0.5f),
-                topLeft = Offset(
-                    ovalCenter.x - ovalWidth / 2,
-                    ovalCenter.y - ovalHeight / 2
-                ),
-                size = Size(ovalWidth, ovalHeight),
-                style = Stroke(width = 5f)
-            )
-
-            // Draw the animated arc
-            drawArc(
-                color = Color.Green,
-                startAngle = -90f,
-                sweepAngle = sweepAngle,
-                useCenter = false,
-                topLeft = Offset(
-                    ovalCenter.x - ovalWidth / 2,
-                    ovalCenter.y - ovalHeight / 2
-                ),
-                size = Size(ovalWidth, ovalHeight),
-                style = Stroke(width = 10f)
-            )
-        }
-    }
-}
-
-
-
-
-@SuppressLint("SourceLockedOrientationActivity")
-@Composable
-fun LockPortraitOrientation(content: @Composable (resetOrientation: () -> Unit) -> Unit) {
-
-    val context = LocalContext.current
-    val activity = context.findActivity()
-
-
-
-    val originalOrientation by rememberSaveable { mutableIntStateOf(activity!!.requestedOrientation) }
-    SideEffect {
-        if (activity != null) {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
-    }
-
-    // wait until screen is rotated correctly
-    if (activity != null) {
-        if (activity.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
-            content {
-                activity.requestedOrientation = originalOrientation
-            }
-        }
     }
 }
 
@@ -471,22 +784,3 @@ internal fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-
-@Composable
-internal fun AlwaysOnMaxBrightnessScreen() {
-    val context = LocalContext.current
-    DisposableEffect(Unit) {
-        val activity = context.findActivity() ?: return@DisposableEffect onDispose {}
-        val originalBrightness = activity.window.attributes.screenBrightness
-        activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        activity.window.attributes = activity.window.attributes.apply {
-            screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL
-        }
-        onDispose {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity.window.attributes = activity.window.attributes.apply {
-                screenBrightness = originalBrightness
-            }
-        }
-    }
-}
