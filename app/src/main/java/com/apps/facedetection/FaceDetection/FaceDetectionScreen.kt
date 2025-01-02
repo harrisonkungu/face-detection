@@ -1,31 +1,28 @@
-package com.apps.facedetection
+package com.apps.facedetection.FaceDetection
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
-import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
-import android.util.Log
 import android.view.ViewGroup.LayoutParams
 import android.widget.LinearLayout
 import android.widget.Toast
-import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -42,13 +39,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,17 +76,18 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.LifecycleOwner
-import com.apps.facedetection.FaceDetector.Companion.blinkCount
-import com.apps.facedetection.FaceDetector.Companion.hasTurnedLeft
-import com.apps.facedetection.FaceDetector.Companion.hasTurnedRight
+import com.apps.facedetection.FaceDetection.FaceDetector.Companion.blinkCount
+import com.apps.facedetection.FaceDetection.FaceDetector.Companion.hasTurnedLeft
+import com.apps.facedetection.FaceDetection.FaceDetector.Companion.hasTurnedRight
+import com.apps.facedetection.R
 import com.google.common.util.concurrent.ListenableFuture
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.Executor
 
-private const val OVAL_WIDTH_DP = 300
-private const val OVAL_HEIGHT_DP = 350
+const val OVAL_WIDTH_DP = 300
+const val OVAL_HEIGHT_DP = 350
 private const val OVAL_LEFT_OFFSET_RATIO = 2
 private const val OVAL_TOP_OFFSET_RATIO = 3
 
@@ -109,13 +106,6 @@ fun FaceDetectionScreen() {
 
     val cameraController: LifecycleCameraController =
         remember { LifecycleCameraController(context) }
-
-
-
-
-
-//    cameraController.cameraSelector =
-//        CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
     val cameraProvider = remember { ProcessCameraProvider.getInstance(context) }
     var isFrontCameraAvailable = remember { mutableStateOf(false) }
     var isBackCameraAvailable = remember { mutableStateOf(false) }
@@ -126,12 +116,6 @@ fun FaceDetectionScreen() {
     val cameraPreviewView = remember {
         mutableStateOf(PreviewView(context))
     }
-    val density = LocalDensity.current
-
-    val ovalWidthPx = with(density) { OVAL_WIDTH_DP.dp.toPx() }
-    val ovalHeightPx = with(density) { OVAL_HEIGHT_DP.dp.toPx() }
-
-
 
     Scaffold(
         modifier = Modifier
@@ -353,7 +337,7 @@ private fun CapturePhotoButton(
     onButtonClicked: ()->Unit
 ) {
     Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = "Tilt turn face to the right and left", color = Color.White)
+        BlinkingText()
         Image(
             modifier = modifier
                 .padding(top = 10.dp)
@@ -373,9 +357,27 @@ private fun CapturePhotoButton(
         )
     }
 
-
-
 }
+
+@Composable
+fun BlinkingText() {
+    val infiniteTransition = rememberInfiniteTransition(label = "")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = ""
+    )
+    Text(
+        text = "Blink your eyes and try tilting your face to the right and left",
+        color = Color.White.copy(alpha = alpha),
+        style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier.padding(16.dp)
+    )
+}
+
 
 
 @Composable
@@ -670,30 +672,7 @@ fun rotateImage(img: Bitmap, degree: Int): Bitmap {
     return rotatedImg
 }
 
-private fun startFaceDetection(
-    context: Context,
-    cameraController: LifecycleCameraController,
-    lifecycleOwner: LifecycleOwner,
-    previewView: PreviewView,
-    ovalRect: Offset,
-    onFaceDetected: (Boolean) -> Unit,
 
-) {
-    cameraController.imageAnalysisTargetSize = CameraController.OutputSize(AspectRatio.RATIO_4_3)
-    cameraController.imageAnalysisBackpressureStrategy = ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
-    cameraController.setImageAnalysisAnalyzer(
-        ContextCompat.getMainExecutor(context),
-        FaceDetector(
-            onFaceDetected = onFaceDetected,
-            ovalCenter = ovalRect,
-            ovalRadiusX = OVAL_WIDTH_DP / 2f,
-            ovalRadiusY = OVAL_HEIGHT_DP / 2f,
-        ),
-    )
-
-    cameraController.bindToLifecycle(lifecycleOwner)
-    previewView.controller = cameraController
-}
 
 
 @Composable
@@ -775,12 +754,5 @@ private fun OvalOverlay(
             )
         }
     }
-}
-
-
-internal fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }
 

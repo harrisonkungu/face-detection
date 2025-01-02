@@ -12,6 +12,7 @@ composeBom = "2024.04.01"
 cameraX = "1.3.4"
 accompanist = "0.32.0"
 visionCommon = "17.3.0"
+mlkitOcr = "16.0.1"
 playServicesMlkitFaceDetection = "17.1.0"
 
 
@@ -39,8 +40,8 @@ camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = 
 camerax-extension = { group = "androidx.camera", name = "camera-extensions", version.ref = "cameraX" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
 vision-common = { group = "com.google.mlkit", name = "vision-common", version.ref = "visionCommon" }
+text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitOcr" }
 
-#implementation(libs.play.services.mlkit.face.detection)
 play-services-mlkit-face-detection = { group = "com.google.android.gms", name = "play-services-mlkit-face-detection", version.ref = "playServicesMlkitFaceDetection" }
 
 [plugins]

@@ -59,6 +59,7 @@ dependencies {
 
     implementation(libs.vision.common)
     implementation(libs.play.services.mlkit.face.detection)
+    implementation(libs.text.recognition)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

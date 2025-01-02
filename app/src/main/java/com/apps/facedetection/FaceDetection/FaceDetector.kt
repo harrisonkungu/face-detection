@@ -1,4 +1,4 @@
-package com.apps.facedetection
+package com.apps.facedetection.FaceDetection
 
 import android.content.Context
 import android.graphics.Canvas
@@ -7,11 +7,17 @@ import android.graphics.Paint
 import android.util.Log
 import android.view.View
 import androidx.annotation.OptIn
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.view.CameraController
+import androidx.camera.view.LifecycleCameraController
+import androidx.camera.view.PreviewView
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
@@ -245,6 +251,7 @@ class FaceDetector(
 //    }
 
 
+
     private fun isFaceInsideOval(
         faceCenter: Offset,
         faceWidth: Float,
@@ -357,6 +364,30 @@ class FaceDetector(
 
 }
 
+fun startFaceDetection(
+    context: Context,
+    cameraController: LifecycleCameraController,
+    lifecycleOwner: LifecycleOwner,
+    previewView: PreviewView,
+    ovalRect: Offset,
+    onFaceDetected: (Boolean) -> Unit,
+
+    ) {
+    cameraController.imageAnalysisTargetSize = CameraController.OutputSize(AspectRatio.RATIO_4_3)
+    cameraController.imageAnalysisBackpressureStrategy = ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
+    cameraController.setImageAnalysisAnalyzer(
+        ContextCompat.getMainExecutor(context),
+        FaceDetector(
+            onFaceDetected = onFaceDetected,
+            ovalCenter = ovalRect,
+            ovalRadiusX = OVAL_WIDTH_DP / 2f,
+            ovalRadiusY = OVAL_HEIGHT_DP / 2f,
+        ),
+    )
+
+    cameraController.bindToLifecycle(lifecycleOwner)
+    previewView.controller = cameraController
+}
 
 class FaceOverlayView(context: Context) : View(context) {
     private val paint = Paint().apply {
