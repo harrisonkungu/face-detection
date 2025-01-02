@@ -72,8 +72,8 @@ For questions or feedback, feel free to reach out to [harrisonkungu@yahoo.com].
 
 **Screenshots**
 <p align="center">
-  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect1.jpeg" alt="Screenshot 1" width="250" height = "500"/>
-  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect2.jpeg" alt="Screenshot 1" width="250" height = "500"/>
-  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect3.jpeg" alt="Screenshot 1" width="250" height = "500"/>
-  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect4.jpeg" alt="Screenshot 1" width="250" height = "500"/>
+  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect1.jpeg" alt="Screenshot 1" width="200" height = "500"/>
+  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect2.jpeg" alt="Screenshot 1" width="200" height = "500"/>
+  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect3.jpeg" alt="Screenshot 1" width="200" height = "500"/>
+  <img src="https://github.com/harrisonkungu/face-detection/blob/main/assets/face-detect4.jpeg" alt="Screenshot 1" width="200" height = "500"/>
 </p>
