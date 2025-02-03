@@ -16,6 +16,7 @@ mlkitOcr = "16.0.1"
 playServicesMlkitFaceDetection = "17.1.0"
 objectDetection = "17.0.2"
 numberpickerVersion= "1.0.3"
+viewModelVersion = "2.8.7"
 
 
 [libraries]
@@ -46,6 +47,10 @@ play-services-mlkit-face-detection = { group = "com.google.android.gms", name = 
 objectDetection = { group = "com.google.mlkit", name = "object-detection", version.ref = "objectDetection" }
 
 numberpicker = { group = "com.chargemap.compose", name = "numberpicker", version.ref = "numberpickerVersion" }
+
+viewModel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "viewModelVersion" }
+
+
 
 
 

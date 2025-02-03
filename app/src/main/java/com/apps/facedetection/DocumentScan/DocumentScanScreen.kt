@@ -50,7 +50,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -166,11 +165,14 @@ fun DocumentScanScreen() {
             if(!imageCorrect.value) {
                 if (isCameraShown) {
                     Column(Modifier.padding(paddingValues)) {
-                        RealTimeCameraAnalyzer(cornerColor, onTextDetected = {
-                            Log.d("ImageCapture", "Image saved at: $it")
-                        }, onImageCaptured = {
-                            Log.e("MLKit", "Text recognition success: ${it}")
-                        })
+                        RealTimeCameraAnalyzer(
+                            cornerColor,
+                            onTextDetected = {
+                                Log.d("ImageCapture", "Image saved at: $it")
+                            },
+                            onImageCaptured = {
+                                Log.e("MLKit", "Text recognition success: ${it}")
+                            })
                     }
 
 

@@ -27,21 +27,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,14 +45,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -71,28 +60,22 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.LifecycleOwner
 import com.apps.facedetection.FaceDetection.FaceDetector.Companion.blinkCount
-import com.apps.facedetection.FaceDetection.FaceDetector.Companion.checksPassed
+import com.apps.facedetection.FaceDetection.FaceDetector.Companion.checksStateFlow
 import com.apps.facedetection.FaceDetection.FaceDetector.Companion.hasTurnedLeft
 import com.apps.facedetection.FaceDetection.FaceDetector.Companion.hasTurnedRight
 import com.apps.facedetection.R
-import com.chargemap.compose.numberpicker.ListItemPicker
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -101,8 +84,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.Executor
-import kotlin.math.abs
-import kotlin.math.absoluteValue
 
 
 const val OVAL_WIDTH_DP = 300
@@ -110,51 +91,6 @@ const val OVAL_HEIGHT_DP = 350
 private const val OVAL_LEFT_OFFSET_RATIO = 2
 private const val OVAL_TOP_OFFSET_RATIO = 3
 
-@Composable
-fun SmoothScrollingList() {
-    val messages = remember { mutableStateListOf<String>() }
-    val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
-    val itemHeight = 80.dp // Adjust as needed
-    val itemWidth = 150.dp // Adjust as needed
-    val itemHeightPx = with(LocalDensity.current) { itemHeight.roundToPx() }
-
-    // Simulate adding new messages
-    LaunchedEffect(Unit) {
-        for (i in 1..20) {
-            delay(500)
-            messages.add("Message $i")
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        LazyColumn(
-            modifier = Modifier
-                .width(itemWidth)
-                .align(Alignment.Center),
-            state = listState,
-            reverseLayout = false,
-            verticalArrangement = Arrangement.Center,
-            contentPadding = PaddingValues(
-                top = itemHeight * 1.5f,
-                bottom = itemHeight * 1.5f
-            )
-        ) {
-            items(messages) { message ->
-                MessageItem(message, listState, itemHeight)
-            }
-        }
-    }
-
-    // Scroll to the bottom when new messages are added
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            coroutineScope.launch {
-                listState.animateScrollToItem(messages.lastIndex)
-            }
-        }
-    }
-}
 
 @Composable
 fun MessageItem(
@@ -201,444 +137,6 @@ fun MessageItem(
         )
     }
 }
-
-
-
-//@Composable
-//fun SmoothPeekViewList() {
-//    val itemsList = (1..10).map { "Item $it" }
-//    val density = LocalDensity.current
-//
-//    LazyColumn(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .padding(vertical = 20.dp),
-//        verticalArrangement = Arrangement.spacedBy(16.dp)
-//    ) {
-//        itemsIndexed(itemsList) { index, item ->
-//            var alpha = when (index) {
-//                1 -> 1f
-//                0, 2 -> 0.5f
-//                else -> 0f
-//            }
-//            val blur = when (index) {
-//                1 -> 0.dp
-//                0, 2 -> 8.dp
-//                else -> 16.dp
-//            }
-//
-//            Box(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(80.dp)
-//                    .graphicsLayer {
-//                        translationY = if (index == 1) 0f else 0f
-//                        alpha = alpha
-//                    }
-//                    .blur(blur)
-//                    .padding(horizontal = 16.dp)
-//            ) {
-//                Text(
-//                    text = item,
-//                    fontSize = 20.sp,
-//                    modifier = Modifier.align(alignment = androidx.compose.ui.Alignment.Center)
-//                )
-//            }
-//        }
-//    }
-//}
-
-//@Composable
-//fun SmoothPeekViewList() {
-//    val itemsList = (1..10).map { "Item $it" }
-//    var listHeight by remember { mutableStateOf(0f) } // Changed to Float
-//    var itemHeight by remember { mutableStateOf(0f) } // Changed to Float
-//
-//    LazyColumn(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .onGloballyPositioned { layoutCoordinates ->
-//                listHeight = layoutCoordinates.size.height.toFloat() // Convert to Float
-//            },
-//        verticalArrangement = Arrangement.spacedBy(15.dp)
-//    ) {
-//        itemsIndexed(itemsList) { index, item ->
-//            var itemOffset by remember { mutableStateOf(Offset(0f, 0f)) }
-//            val isCentered = itemOffset.y in (listHeight / 2 - itemHeight / 2)..(listHeight / 2 + itemHeight / 2)
-//            val blur = if (isCentered) 0.dp else 16.dp
-//            val alpha = animateFloatAsState(targetValue = if (isCentered) 1f else 0.5f)
-//
-//            Box(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(10.dp)
-//                    .onGloballyPositioned { coordinates ->
-//                        itemOffset = coordinates.positionInParent()
-//                        itemHeight = coordinates.size.height.toFloat() // Convert to Float
-//                    }
-//                    .blur(blur)
-//                    .alpha(alpha.value)
-//                    .padding(horizontal = 16.dp)
-//            ) {
-//                Text(
-//                    text = item,
-//                    fontSize = 10.sp,
-//                    modifier = Modifier.align(alignment = androidx.compose.ui.Alignment.Center)
-//                )
-//            }
-//        }
-//    }
-//}
-
-
-
-//@Composable
-//fun SmoothPeekViewList() {
-//    val itemsList = (1..10).map { "Item $it" }
-//    val listState = rememberLazyListState()
-//    var listHeight by remember { mutableStateOf(0f) }
-//    var itemHeight by remember { mutableStateOf(0f) }
-//
-//    LazyColumn(
-//        state = listState,
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .onGloballyPositioned { layoutCoordinates ->
-//                listHeight = layoutCoordinates.size.height.toFloat()
-//            },
-//        verticalArrangement = Arrangement.spacedBy(15.dp),
-//        contentPadding = PaddingValues(vertical = (listHeight / 2 - itemHeight / 2).dp)
-//    ) {
-//        itemsIndexed(itemsList) { index, item ->
-//            var itemOffset by remember { mutableStateOf(Offset(0f, 0f)) }
-//
-//            val distanceFromCenter = (listHeight / 2 - (itemOffset.y + itemHeight / 2)).absoluteValue
-//            val visibilityFactor = (1 - (distanceFromCenter / (listHeight / 2))).coerceIn(0f, 1f)
-//
-//            val blur = animateFloatAsState(targetValue = (1 - visibilityFactor) * 16f)
-//            val alpha = animateFloatAsState(targetValue = visibilityFactor)
-//
-//            Box(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(80.dp)
-//                    .onGloballyPositioned { coordinates ->
-//                        itemOffset = coordinates.positionInParent()
-//                        itemHeight = coordinates.size.height.toFloat()
-//                    }
-//                    .blur(blur.value.dp)
-//                    .alpha(alpha.value)
-//                    .padding(horizontal = 16.dp)
-//            ) {
-//                Text(
-//                    text = item,
-//                    fontSize = 20.sp,
-//                    modifier = Modifier.align(alignment = androidx.compose.ui.Alignment.Center)
-//                )
-//            }
-//        }
-//    }
-//
-//    // LaunchedEffect to snap to the nearest item after scrolling
-//    LaunchedEffect(listState.isScrollInProgress) {
-//        if (!listState.isScrollInProgress) {
-//            delay(100) // Small delay to ensure scroll has completely stopped
-//            val centerItemIndex = (listState.firstVisibleItemIndex +
-//                    if (abs(listState.firstVisibleItemScrollOffset) > itemHeight / 2) 1 else 0)
-//            listState.animateScrollToItem(centerItemIndex)
-//        }
-//    }
-//}
-
-
-
-
-
-@Composable
-fun SmoothPeekViewList() {
-    val itemsList = (1..10).map { "Item $it" }
-    val listState = rememberLazyListState()
-    var listHeight by remember { mutableStateOf(0f) }
-    var itemHeight by remember { mutableStateOf(0f) }
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .onGloballyPositioned { layoutCoordinates ->
-                listHeight = layoutCoordinates.size.height.toFloat()
-            },
-        verticalArrangement = Arrangement.spacedBy(15.dp),
-        contentPadding = PaddingValues(vertical = (listHeight / 2).dp - (itemHeight / 2).dp)
-    ) {
-        itemsIndexed(itemsList) { index, item ->
-            var itemOffset by remember { mutableStateOf(Offset(0f, 0f)) }
-
-            val distanceFromCenter = (listHeight / 2 - (itemOffset.y + itemHeight / 2)).absoluteValue
-            val visibilityFactor = (1 - (distanceFromCenter / (listHeight / 2))).coerceIn(0f, 1f)
-
-            val blur = animateFloatAsState(targetValue = (1 - visibilityFactor) * 16f)
-            val alpha = animateFloatAsState(targetValue = visibilityFactor)
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .onGloballyPositioned { coordinates ->
-                        itemOffset = coordinates.positionInParent()
-                        itemHeight = coordinates.size.height.toFloat()
-                    }
-                    .blur(blur.value.dp)
-                    .alpha(alpha.value)
-                    .padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    text = item,
-                    fontSize = 20.sp,
-                    modifier = Modifier.align(alignment = androidx.compose.ui.Alignment.Center)
-                )
-            }
-        }
-    }
-
-    // LaunchedEffect to snap to the nearest item after scrolling
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            // Delay to ensure scroll has stopped
-            delay(100)
-
-            // Find the center of the list and calculate the index of the item closest to the center
-            val centerPosition = listHeight / 2
-            val closestItemIndex = listState.layoutInfo.visibleItemsInfo.minByOrNull {
-                abs(it.offset + itemHeight / 2 - centerPosition)
-            }?.index
-
-            // Animate scroll to center the closest item
-            closestItemIndex?.let {
-                listState.animateScrollToItem(it)
-            }
-        }
-    }
-}
-
-
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun <T> InfiniteCircularList(
-    width: Dp,
-    itemHeight: Dp,
-    numberOfDisplayedItems: Int = 3,
-    items: List<T>,
-    initialItem: T,
-    itemScaleFact: Float = 1.5f,
-    textStyle: TextStyle,
-    textColor: Color,
-    onItemSelected: (index: Int, item: T) -> Unit = { _, _ -> }
-) {
-    val itemHalfHeight = LocalDensity.current.run { itemHeight.toPx() / 2f }
-    val scrollState = rememberLazyListState(0)
-    var lastSelectedIndex by remember { mutableIntStateOf(0) }
-    var itemsState by remember { mutableStateOf(items) }
-
-    LaunchedEffect(items) {
-        var targetIndex = items.indexOf(initialItem) - 1
-        targetIndex += ((Int.MAX_VALUE / 2) / items.size) * items.size
-        itemsState = items
-        lastSelectedIndex = targetIndex
-        scrollState.scrollToItem(targetIndex)
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .width(width)
-            .height(itemHeight * numberOfDisplayedItems),
-        state = scrollState,
-        flingBehavior = rememberSnapFlingBehavior(lazyListState = scrollState)
-    ) {
-        items(
-            count = Int.MAX_VALUE,
-            itemContent = { i ->
-                val item = itemsState[i % itemsState.size]
-                var itemOffset by remember { mutableFloatStateOf(0f) }
-                Box(
-                    modifier = Modifier
-                        .height(itemHeight)
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coordinates ->
-                            val y = coordinates.positionInParent().y - itemHalfHeight
-                            itemOffset = y
-                            val parentHalfHeight =
-                                (coordinates.parentCoordinates?.size?.height ?: 0) / 2f
-                            val isSelected =
-                                (y > parentHalfHeight - itemHalfHeight && y < parentHalfHeight + itemHalfHeight)
-                            if (isSelected && lastSelectedIndex != i) {
-                                onItemSelected(i % itemsState.size, item)
-                                lastSelectedIndex = i
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    val distanceFromCenter = (itemOffset - itemHalfHeight).absoluteValue
-                    val visibilityFactor = (1 - (distanceFromCenter / itemHalfHeight)).coerceIn(0f, 1f)
-                    val blur = animateFloatAsState(targetValue = (1 - visibilityFactor) * 16f,
-                        label = ""
-                    )
-                    val alpha = animateFloatAsState(targetValue = visibilityFactor, label = "")
-
-                    Text(
-                        text = item.toString(),
-                        style = textStyle,
-                        color = textColor,
-                        fontSize = textStyle.fontSize * if (lastSelectedIndex == i) itemScaleFact else 1f,
-                        modifier = Modifier
-                            .blur(blur.value.dp)
-                            .alpha(alpha.value)
-                    )
-                }
-            }
-        )
-    }
-}
-
-
-
-
-
-//@SuppressLint("RememberReturnType")
-//@Composable
-//fun FaceDetectionScreen() {
-//    val context: Context = LocalContext.current
-//    val lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current
-//
-//    var isCameraShown by remember { mutableStateOf(true) }
-//    var isFaceDetected by remember { mutableStateOf(false) }
-//    var imageCorrect = remember { mutableStateOf(false) }
-//
-//    var capturedPhoto by remember { mutableStateOf<ImageBitmap?>(null) }
-//    var ovalCenter by remember { mutableStateOf<Offset?>(null) }
-//
-//    val cameraController: LifecycleCameraController =
-//        remember { LifecycleCameraController(context) }
-//    val cameraProvider = remember { ProcessCameraProvider.getInstance(context) }
-//    var isFrontCameraAvailable = remember { mutableStateOf(false) }
-//    var isBackCameraAvailable = remember { mutableStateOf(false) }
-//    var isUsingFrontCamera = remember { mutableStateOf(true) }
-//
-//
-//
-//    val cameraPreviewView = remember {
-//        mutableStateOf(PreviewView(context))
-//    }
-//
-//    Scaffold(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .navigationBarsPadding()
-//            .statusBarsPadding(),
-//    ) { paddingValues: PaddingValues ->
-//        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-//
-//            if(!imageCorrect.value) {
-//                if (isCameraShown) {
-//                    CameraView(paddingValues, cameraPreviewView)
-//
-//                } else {
-//                    capturedPhoto?.let { photo ->
-//                        CapturedPhotoView(photo)
-//                    }
-//                }
-//                OvalOverlay(
-//                    modifier = Modifier.fillMaxSize(),
-//                    isFaceDetected = isFaceDetected,
-//                    onCenterCalculated = { ovalCenter = it },
-//                    autoCapture = {
-//                        capturePhotoAndReplaceBackground(
-//                            context,
-//                            cameraController,
-//                            isFaceDetected
-//                        ) { capturedBitmap ->
-//                            capturedPhoto = capturedBitmap.asImageBitmap()
-//                            if (isFaceDetected)
-//                                isCameraShown = false
-//                        }
-//                    }
-//                )
-//                ovalCenter?.let { offset ->
-//                    startFaceDetection(
-//                        context = context,
-//                        cameraController = cameraController,
-//                        lifecycleOwner = lifecycleOwner,
-//                        previewView = cameraPreviewView.value,
-//                        ovalRect = offset,
-//                        onFaceDetected = { detected ->
-//                            isFaceDetected = detected
-//                        },
-//                    )
-//                }
-//                if (isCameraShown) {
-//                    Column(modifier = Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-//
-//                        CapturePhotoButton(
-//                            modifier = Modifier
-//                                .padding(bottom = 10.dp),
-//                            isFaceDetected = isFaceDetected,
-//                            onButtonClicked = {
-//                                capturePhotoAndReplaceBackground(
-//                                    context,
-//                                    cameraController,
-//                                    isFaceDetected
-//                                ) { capturedBitmap ->
-//                                    capturedPhoto = capturedBitmap.asImageBitmap()
-//                                    if (isFaceDetected)
-//                                        isCameraShown = false
-//                                }
-//                            },
-//                        )
-//
-//                        CameraToggleButton(cameraController, cameraProvider, isFrontCameraAvailable, isBackCameraAvailable, isUsingFrontCamera)
-//                    }
-//
-//
-//
-//                } else {
-//                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-//
-//                        RecaptureButton(
-//                            modifier = Modifier
-//                                .padding(bottom = 20.dp),
-//                            onButtonClicked = {
-//                                isCameraShown = true
-//                                isFaceDetected = false
-//                                hasTurnedLeft.value = false
-//                                hasTurnedRight.value = false
-//                                blinkCount = 0
-//                            },
-//                        )
-//                        CorrectButton(
-//                            modifier = Modifier
-//                                .padding(bottom = 50.dp),
-//                            onButtonClicked = {
-//                                imageCorrect.value = true
-//                                hasTurnedLeft.value = false
-//                                hasTurnedRight.value = false
-//                                blinkCount = 0
-//                            },
-//                        )
-//                    }
-//
-//
-//                }
-//
-//            }else if (imageCorrect.value && capturedPhoto!=null){
-//                capturedPhoto?.let { photo ->
-//                    CorrectImageAvatar(photo)
-//                }
-//            }
-//        }
-//
-//    }
-//}
 
 
 @SuppressLint("RememberReturnType")
@@ -716,6 +214,8 @@ fun FaceDetectionScreen() {
                         previewView = cameraPreviewView.value,
                         ovalRect = offset,
                         onFaceDetected = { detected ->
+                            Log.d("isFaceDetected1", isFaceDetected.toString())
+                            Log.d("isFaceDetected2", detected.toString())
                             isFaceDetected = detected
                         },
                     )
@@ -939,29 +439,6 @@ fun ScrollableColumnWithTitleImageAndButtons(
     }
 }
 
-//@Composable
-//fun CorrectImageAvatar(photo: Any?) {
-//    val painter = when (photo) {
-//        is String -> rememberAsyncImagePainter(
-//            model = photo,
-//            placeholder = painterResource(id = R.drawable.ic_launcher_foreground), // Replace with your placeholder
-//            error = painterResource(id = R.drawable.ic_launcher_foreground) // Replace with your error image
-//        )
-//        is Int -> painterResource(id = photo)
-//        else -> painterResource(id = R.drawable.ic_launcher_foreground) // Default placeholder if null or invalid type
-//    }
-//
-//    Image(
-//        painter = painter,
-//        contentDescription = "Avatar",
-//        modifier = Modifier
-//            .size(120.dp)
-//            .clip(CircleShape),
-//        contentScale = ContentScale.Crop
-//    )
-//}
-
-
 
 @Composable
 private fun CameraView(
@@ -1031,67 +508,10 @@ fun BlinkingText(loaderState: MutableState<Boolean>) {
     )
 
 
-//    val possibleValues = remember {
-//        listOf(
-//            ""
-//        )
-//    }
-//    var state by remember { mutableStateOf(possibleValues[0]) }
-//    ListItemPicker(
-//        modifier = Modifier.fillMaxWidth(),
-//        label = { it },
-//        value = state,
-//        onValueChange = { state = it },
-//        dividersColor = Color.Transparent,
-//        textStyle = TextStyle.Default.copy(color = Color.White, fontSize = 16.sp),
-//        list = possibleValues
-//    )
-//
 
+    val guideMessage by checksStateFlow.collectAsState()
 
-    val checkCount by checksPassed.collectAsState(initial = 0)
-
-//    "Face Detected: Ensure your face is fully visible in the frame.",
-//    "Blink Detection: Blink naturally when prompted.",
-//    "Looking Straight: Look directly at the camera.",
-//    "Head Turn (Right): Turn your head slowly to the right.",
-//    "Head Turn (Left): Turn your head slowly to the left.",
-//    "Face Not Far Away: Stay at a comfortable distance from the camera."
-
-    val possibleValues = remember {
-        listOf(
-            "Ensure your face is fully visible",
-            "Look directly at the camera",
-            "Head Turn (Right).",
-            "Blink eyes",
-            "Move Closer",
-            "Okay",
-            "Saving..."
-        )
-    }
-
-    // Mutable list to keep track of failed tests
-    var failedTests by remember { mutableStateOf(emptyList<String>()) }
-
-    // Sample function to simulate test results
-    fun updateFailedTests(test: String) {
-        if (!failedTests.contains(test)) {
-            failedTests = failedTests + test
-        }
-    }
-
-//    var state by remember { mutableStateOf(failedTests.getOrElse(4) { "" }) }
-    var state by remember { mutableStateOf(possibleValues[checkCount]) }
-
-    ListItemPicker(
-        modifier = Modifier.fillMaxWidth(),
-        label = { it },
-        value = possibleValues[checkCount],
-        onValueChange = { state = it },
-        dividersColor = Color.Transparent,
-        textStyle = TextStyle.Default.copy(color = Color.White, fontSize = 16.sp),
-        list = possibleValues
-    )
+    Text(text = guideMessage.currentGuideMessage)
 
 
 }
@@ -1208,18 +628,14 @@ fun capturePhotoAndReplaceBackground(
     loaderState: MutableState<Boolean>,
     onBackgroundReplaced: (Bitmap) -> Unit,
 ) {
-
     val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
     if (isFaceDetected) {
         scope.launch {
-//            loaderState.value = true
-            delay(1000) // 3 seconds delay
+            loaderState.value = true
             cameraController.takePicture(
                 mainExecutor,
                 object : ImageCapture.OnImageCapturedCallback() {
                     override fun onCaptureSuccess(image: ImageProxy) {
-
-
                         try {
                             val buffer = image.planes[0].buffer
                             buffer.rewind()
@@ -1233,6 +649,7 @@ fun capturePhotoAndReplaceBackground(
                             val fileUri = saveBitmapToFile(context, bitmap, "captured_image.jpg")
                             if (degrees != 0) {
                                 //samsung
+
                                 bitmap = rotateBitmap(bitmap, degrees)
                                 processCapturedPhotoAndReplaceBackground(true, bitmap, context, fileUri) { processedBitmap ->
                                     if (fileUri != null) {
@@ -1240,7 +657,6 @@ fun capturePhotoAndReplaceBackground(
                                             val validImageFeatures= validateImageFeatures(processedBitmap)
                                             if (validImageFeatures){
                                                 Log.d("FACE DETECT", "Detected face successfully")
-//                                                Toast.makeText(context, "Done Processing1", Toast.LENGTH_SHORT).show()
                                                 onBackgroundReplaced(processedBitmap)
                                             }else{
                                                 Toast.makeText(context, "Invalid Image", Toast.LENGTH_SHORT).show()
@@ -1254,7 +670,6 @@ fun capturePhotoAndReplaceBackground(
                             }else{
                                 processCapturedPhotoAndReplaceBackground(false, bitmap, context, fileUri) { processedBitmap ->
                                     if (fileUri != null) {
-
                                         scope.launch {
                                             val validImageFeatures= validateImageFeatures(processedBitmap)
                                             if (validImageFeatures){
@@ -1429,8 +844,6 @@ fun rotateImage(img: Bitmap, degree: Int): Bitmap {
 
 
 
-
-
 @Composable
 private fun OvalOverlay(
     modifier: Modifier = Modifier,
@@ -1439,18 +852,18 @@ private fun OvalOverlay(
     autoCapture: () -> Unit,
     isLoading: MutableState<Boolean> // New parameter for loader state
 ) {
-    val checkCount by checksPassed.collectAsState(initial = 0)
-    val sweepAngle by animateFloatAsState(
-        targetValue = checkCount * 72f, // Each check contributes 120 degrees
-        animationSpec = tween(
-            durationMillis = 400,
-            easing = LinearEasing
-        ), label = ""
+
+    val checksState by checksStateFlow.collectAsState()
+    val totalSweepAngle = checksState.checks.sumOf { it.sweepAngle.toDouble() }.toFloat()
+
+    val animatedSweepAngle by animateFloatAsState(
+        targetValue = totalSweepAngle,
+        animationSpec = tween(durationMillis = 400, easing = LinearEasing), label = ""
     )
 
-    LaunchedEffect(sweepAngle) {
-        if (sweepAngle >= 360f) {
-            isLoading.value = true
+    LaunchedEffect(totalSweepAngle) {
+        if (totalSweepAngle == 360f) {
+           isLoading.value = true
             autoCapture()
         }
     }
@@ -1487,12 +900,12 @@ private fun OvalOverlay(
                 addOval(ovalRect)
             }
             clipPath(ovalPath, clipOp = ClipOp.Difference) {
-                drawRect(SolidColor(Color.Black.copy(alpha = 0.95f)))
+                drawRect(SolidColor(Color.Black.copy(alpha = 0.85f)))
             }
         }
 
         if (isLoading.value) {
-            val infiniteTransition = rememberInfiniteTransition()
+            val infiniteTransition = rememberInfiniteTransition(label = "")
             val rotation by infiniteTransition.animateFloat(
                 initialValue = 0f,
                 targetValue = 360f,
@@ -1540,7 +953,7 @@ private fun OvalOverlay(
                 drawArc(
                     color = Color.Green,
                     startAngle = -90f,
-                    sweepAngle = sweepAngle,
+                    sweepAngle = animatedSweepAngle,
                     useCenter = false,
                     topLeft = Offset(ovalLeft, ovalTop + ovalSize.height),
                     size = ovalSize,

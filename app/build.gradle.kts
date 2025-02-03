@@ -78,6 +78,10 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.objectDetection)
     implementation(libs.numberpicker)
+    implementation(libs.viewModel)
+
+
+
 
 
 }
