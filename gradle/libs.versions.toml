@@ -14,8 +14,9 @@ accompanist = "0.32.0"
 visionCommon = "17.3.0"
 mlkitOcr = "16.0.1"
 playServicesMlkitFaceDetection = "17.1.0"
-
-
+objectDetection = "17.0.2"
+numberpickerVersion= "1.0.3"
+viewModelVersion = "2.8.7"
 
 
 [libraries]
@@ -43,6 +44,16 @@ vision-common = { group = "com.google.mlkit", name = "vision-common", version.re
 text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitOcr" }
 
 play-services-mlkit-face-detection = { group = "com.google.android.gms", name = "play-services-mlkit-face-detection", version.ref = "playServicesMlkitFaceDetection" }
+objectDetection = { group = "com.google.mlkit", name = "object-detection", version.ref = "objectDetection" }
+
+numberpicker = { group = "com.chargemap.compose", name = "numberpicker", version.ref = "numberpickerVersion" }
+
+viewModel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "viewModelVersion" }
+
+
+
+
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
